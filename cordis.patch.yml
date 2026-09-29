@@ -1,0 +1,6 @@
+# dsh-open-in-codebuddy bundle patch：一个 insert 注册本插件。
+# insert.name 必须是【包名】（dsh plugin add 后由 profile 的 node_modules 解析到 lib/index.js）；
+# insert.id 与入口导出的 cordis `name`（'open-in-codebuddy'）保持一致。
+- insert:
+    - id: open-in-codebuddy
+      name: 'dsh-open-in-codebuddy'

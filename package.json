@@ -1,0 +1,54 @@
+{
+  "name": "dsh-open-in-codebuddy",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 插件：在 Session header 添加按钮，一键用本机 CodeBuddy CN 打开当前 workspace 目录。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://cnb.cool/txpoi/lovezi0/dsh-open-in-codebuddy.git"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "codebuddy",
+    "open-in-app"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/schemastery": ">=3.18.3 <4.0.0"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "selftest": "node --import ./tests/register-stub.mjs tests/host-selftest.mjs && node tests/client-selftest.mjs"
+  }
+}
