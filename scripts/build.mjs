@@ -23,7 +23,7 @@ try { rmSync(join(lib, "index.mjs"), { force: true }); } catch {}
 // 顺序即闭包作用域依赖顺序：head 定义 module/exports/React，中间定义组件工厂，tail 定义 apply 并导出。
 const CLIENT_PARTS = [
   "00-head.js",
-  "10-button.js",
+  "10-target.js",
   "90-tail.js",
 ];
 const clientDir = join(src, "client");

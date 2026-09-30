@@ -1,15 +1,40 @@
 // 宿主半边离线自测：不装载进 DSH，用假 ctx 驱动注册出来的路由处理函数，
-// 覆盖围栏、入参校验与探测分支。真实 spawn 会弹 GUI，默认跳过；
-// 需要联机验证启动链路时显式 OIC_SELFTEST_SPAWN=1 运行。
+// 覆盖围栏、入参校验与探测分支；并校验清单/产物/文档的静态对齐。
+// 真实 spawn 会弹 GUI，默认跳过；需要联机验证启动链路时显式 OIC_SELFTEST_SPAWN=1 运行。
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
+const root = new URL("../", import.meta.url);
 const { apply, name, inject } = await import(new URL("../lib/index.js", import.meta.url).href);
 
 assert.equal(name, "open-in-codebuddy");
 assert.deepEqual(inject, ["webServer", "webRuntime"]);
+
+// ---- 清单与产物对齐 ----
+
+const pkg = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
+assert.equal(pkg.main, "lib/index.js", "main points at the built host entry");
+assert.equal(pkg.exports["."], "./lib/index.js", 'exports["."] matches main');
+assert.equal(pkg.exports["./client"], "./lib/client.js", 'exports["./client"] matches the client bundle');
+assert.equal(pkg.dsh.client.platform, "web", "the browser half is declared for the web platform");
+for (const rel of ["lib/index.js", "lib/client.js", "cordis.patch.yml", pkg.exports["."], pkg.exports["./client"]]) {
+  assert.ok(existsSync(new URL(rel, root)), `built file exists: ${rel}`);
+}
+for (const rel of ["src/index.mjs", "src/client/00-head.js", "src/client/10-target.js", "src/client/90-tail.js"]) {
+  assert.ok(existsSync(new URL(rel, root)), `source file exists: ${rel}`);
+}
+
+// ---- bundle patch 行：三个名字各司其职 ----
+
+const patch = readFileSync(new URL(pkg.dsh.bundle.patch, root), "utf8");
+const rowId = /^\s*-\s*id:\s*(\S+)\s*$/m.exec(patch);
+const rowName = /^\s*name:\s*'?([^'\s]+)'?\s*$/m.exec(patch);
+assert.ok(rowId && rowName, "bundle patch declares one insert row");
+assert.equal(rowName[1], pkg.name, "insert.name is the package name (resolved through profile node_modules)");
+assert.equal(rowId[1], name, "insert.id equals the exported cordis service name");
 
 // ---- 假宿主环境 ----
 
@@ -32,12 +57,35 @@ apply(ctx, { codebuddyHome: "" });
 assert.ok(routes.has("/open-in-codebuddy/available"), "available route registered");
 assert.ok(routes.has("/open-in-codebuddy/open"), "open route registered");
 
+// ---- 与「Open In...」底座的注册契约对齐 ----
+// 底座按 <route>/available 与 <route>/open 调用贡献方，route 来自 client 半边的目标记录；
+// 两边漂移会静默失效，这里把跨半边的约定钉住。
+
+const clientBundle = readFileSync(new URL("lib/client.js", root), "utf8");
+assert.ok(clientBundle.includes(`id: "${pkg.name}"`), "client bundle registers under the package name");
+const targetRoute = /route:\s*"([^"]+)"/.exec(clientBundle)?.[1];
+assert.ok(targetRoute !== undefined && targetRoute.length > 0, "client target declares a route");
+assert.ok(!targetRoute.startsWith("/") && !targetRoute.includes("://"), "route is a document-relative path");
+assert.ok(routes.has(`/${targetRoute}/available`), "host registers the availability endpoint the target advertises");
+assert.ok(routes.has(`/${targetRoute}/open`), "host registers the open endpoint the target advertises");
+// 底座硬要求：贡献方不自挂按钮、不自绘样式，外观与菜单交给底座。
+assert.ok(!clientBundle.includes("conversation.session.header.utilities"), "client bundle does not register its own header slot");
+assert.ok(!clientBundle.includes("createElement"), "client bundle builds no DOM of its own");
+
+// ---- README 的事实性 ----
+
+const readme = readFileSync(new URL("README.md", root), "utf8");
+assert.ok(readme.includes("dsh-open-in-app-base"), "README declares the base-plugin prerequisite");
+for (const match of readme.matchAll(/\]\(\.\/([^)#?]+)\)/g)) {
+  assert.ok(existsSync(new URL(match[1], root)), `README links to an existing file: ${match[1]}`);
+}
+
 class FakeRequest extends EventEmitter {
   constructor({ method = "GET", headers = {}, body } = {}) {
     super();
     this.method = method;
     this.headers = headers;
-    this.url = Object.entries(routes).length ? "/selftest" : "/selftest";
+    this.url = "/selftest";
     if (body !== undefined) {
       queueMicrotask(() => { this.emit("data", Buffer.from(body)); this.emit("end"); });
     } else {
@@ -95,7 +143,8 @@ const IS_WINDOWS = process.platform === "win32";
     headers: { ...LOOPBACK, origin: "http://127.0.0.1:3080" },
   }));
   assert.equal(res.statusCode, 200, "same-origin allowed");
-  assert.equal(typeof res.json.available, "boolean");
+  assert.equal(typeof res.json.available, "boolean", "availability is the boolean the base plugin reads");
+  assert.equal(res.json.ok, true, "the base plugin reads ok as well");
   assert.equal(res.json.available, IS_WINDOWS, "availability follows platform install state");
 }
 

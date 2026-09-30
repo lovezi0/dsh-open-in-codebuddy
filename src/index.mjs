@@ -1,13 +1,15 @@
-// dsh-open-in-codebuddy — 在 Session header 添加按钮，用本机 CodeBuddy CN 打开当前 workspace 目录。
+// dsh-open-in-codebuddy — 宿主半边：为「Open In...」底座的 CodeBuddy CN 目标提供探测与打开。
 //
-// 原理：宿主注册两条同源路由（available / open），open 路由直接 spawn 本机
-// CodeBuddy CN 的 CLI 入口，绕开原生 open-in-app 的编译期应用目录表。
+// 按钮与菜单由 dsh-open-in-app-base 渲染，底座按约定调用本插件的两条同源路由：
+//   GET  <route>/available          报告本机是否装有 CodeBuddy CN
+//   POST <route>/open（body { path }）打开目录
+// open 路由直接 spawn 本机 CodeBuddy CN 的 CLI 入口，绕开原生 open-in-app 的编译期应用目录表。
 // 启动写法复刻官方 shim（bin/buddycn.cmd）的两要素：
 //   ELECTRON_RUN_AS_NODE=1 + <主exe> <resources/app/out/cli.js> <目录>。
 // 缺该变量时主 exe 会把 cli.js 当普通文件打开；shim 直调不可行（非 shell 模式
 // spawn .cmd 在 Windows 报 EINVAL），故写法 B（cmd.exe 转调 shim）仅作异常兜底。
 //
-// 仅 win32 生效；其余平台 available 恒为 false，按钮不渲染。
+// 仅 win32 生效；其余平台 available 恒为 false，目标不出现在菜单里。
 import { execFile, spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";

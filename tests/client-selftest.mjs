@@ -1,172 +1,103 @@
 // 浏览器半边离线自测：在 vm 沙箱里执行构建产物 lib/client.js（同时验证产物与源一致），
-// 用假 React / document / fetch 驱动完整渲染链：注册参数、探测显隐、点击 POST、无 cwd 禁用。
+// 用假客户端 ctx 驱动 apply：注册参数符合底座契约、注册随 effect 挂载、卸载即反注册。
+// 沙箱不提供 document / fetch / react：产物一旦试图自绘或联网，这里会直接失败。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
-const BUNDLE = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8");
-
-// ---- 假 React（单次渲染钩子槽 + 手动冲刷 effect） ----
-
-let hookSlots = {};
-let hookIdx = 0;
-let effectQueue = [];
-
-const React = {
-  createElement: (type, props, ...children) => ({
-    type,
-    props: props ?? {},
-    children: children.flat(Infinity).filter((c) => c !== null && c !== undefined),
-  }),
-  useState: (init) => {
-    const i = hookIdx++;
-    if (!(i in hookSlots)) hookSlots[i] = { value: typeof init === "function" ? init() : init };
-    const slot = hookSlots[i];
-    return [slot.value, (v) => { slot.value = typeof v === "function" ? v(slot.value) : v; }];
-  },
-  useReducer: (reducer, init) => {
-    const i = hookIdx++;
-    if (!(i in hookSlots)) hookSlots[i] = { value: init };
-    const slot = hookSlots[i];
-    return [slot.value, (action) => { slot.value = reducer(slot.value, action); }];
-  },
-  useEffect: (fn) => { effectQueue.push(fn); },
-};
-
-function render(component, props, { runEffects = false } = {}) {
-  hookIdx = 0;
-  effectQueue = [];
-  const out = component(props);
-  if (runEffects) {
-    effectQueue.forEach((fn) => fn());
-    effectQueue = [];
-  }
-  return out;
-}
-
-const settle = async (times = 5) => {
-  for (let i = 0; i < times; i++) await new Promise((r) => setTimeout(r, 0));
-};
+const root = new URL("../", import.meta.url);
+const pkg = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
+const BUNDLE = readFileSync(new URL("lib/client.js", root), "utf8");
 
 // ---- 装载 client bundle ----
 
 let captured = null;
 const sandbox = {
-  window: { __ModuleLoader__: { load: (def) => { captured = def; } } },
-  document: {
-    getElementById: () => null,
-    createElement: () => ({ id: "", textContent: "", remove() {} }),
-    head: { appendChild() {} },
-  },
-  navigator: { language: "zh-CN" },
-  setTimeout, clearTimeout, console,
-  fetch: undefined,
+  window: { __ModuleLoader__: { load: (definition) => { captured = definition; } } },
+  console,
 };
 vm.createContext(sandbox);
 vm.runInContext(BUNDLE, sandbox, { filename: "lib/client.js" });
 
 assert.ok(captured, "module registered via __ModuleLoader__");
-assert.equal(captured.id, "dsh-open-in-codebuddy");
+assert.equal(captured.id, pkg.name, "registered id equals the package name");
 
-const requireStub = (name) => {
-  if (name === "react") return React;
-  throw new Error(`unexpected require: ${name}`);
-};
-const exportsObj = captured.factory(requireStub);
+// 宿主契约：工厂拿到的 require 只能取平台单例；本插件应完全不取用。
+const clientExports = captured.factory((name) => { throw new Error(`unexpected require: ${name}`); });
 
-assert.equal(typeof exportsObj.apply, "function");
-// 跨 realm 数组原型不等，深比较前统一 JSON 归一。
-assert.equal(JSON.stringify(exportsObj.inject), JSON.stringify(["sessions", "slots", "locale"]));
+assert.equal(typeof clientExports.apply, "function", "apply exported");
+assert.equal(JSON.stringify(clientExports.inject), JSON.stringify(["openInAppTargets"]), "declares the base registry service");
 
-// ---- 假客户端 ctx ----
+// ---- 假客户端 ctx：底座已装配的那个世界 ----
 
-function makeCtx({ cwd, available }) {
-  const byId = cwd === null ? {} : { s1: { id: "s1", cwd, retainedBy: { mainView: 1 } } };
-  const store = {
-    getSnapshot: () => ({ ids: Object.keys(byId), byId }),
-    subscribe: (cb) => { store._cb = cb; return () => { store._cb = null; }; },
-  };
-  let slotName = null;
-  let registered = null;
-  const fetchCalls = [];
-  sandbox.fetch = (url, opts) => {
-    fetchCalls.push({ url, opts });
-    if (String(url).endsWith("/available")) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, available }) });
-    }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, via: "cli" }) });
-  };
+function makeEnv() {
+  const registered = [];
+  const released = [];
+  const disposers = [];
   const ctx = {
-    sessions: { list: store },
-    locale: { register: () => {}, bind: () => () => undefined },
-    effect: (fn) => fn(),
-    slots: {
-      inject: (name, cb) => {
-        slotName = name;
-        registered = cb();
+    effect: (fn, label) => { disposers.push({ label, dispose: fn() }); return () => {}; },
+    openInAppTargets: {
+      register: (target) => {
+        registered.push(target);
+        return () => { released.push(target.id); };
       },
-      register: (options, component) => ({ options, component }),
     },
   };
-  exportsObj.apply(ctx);
-  return { ctx, slotName, get registered() { return registered; }, fetchCalls };
+  clientExports.apply(ctx);
+  return { ctx, registered, released, disposers };
 }
 
-// ---- 场景 1：可用 + 有 cwd → 渲染按钮，点击发 POST ----
+// ---- 场景 1：注册参数满足底座契约 ----
 
 {
-  hookSlots = {};
-  const env = makeCtx({ cwd: "X:\\demo\\带空格 dir", available: true });
-  assert.equal(env.slotName, "conversation.session.header.utilities");
-  const { options, component } = env.registered;
-  assert.equal(options.id, "open-in-codebuddy");
-  assert.equal(options.name, "conversation.session.header.utilities");
-  assert.equal(options.order, -9);
-  assert.equal(options.locale, "open-in-codebuddy");
-
-  render(component, { sessionId: "s1" }, { runEffects: true });
-  await settle();
-  const out = render(component, { sessionId: "s1" });
-  assert.equal(out?.type, "button", "button renders when available");
-  assert.equal(out.props.className, "oic-pill");
-  assert.equal(out.props.disabled, false);
-  assert.equal(out.props.title, "在 CodeBuddy CN 中打开当前工作区");
-  assert.ok(JSON.stringify(out.children).includes("CodeBuddy"), "label present");
-
-  await out.props.onClick();
-  await settle();
-  const post = env.fetchCalls.find((c) => String(c.url).endsWith("/open"));
-  assert.ok(post, "launch issued POST to open route");
-  assert.equal(post.opts.method, "POST");
-  assert.equal(JSON.parse(post.opts.body).path, "X:\\demo\\带空格 dir");
-  console.log("client-selftest: scenario 1 (render + click) passed");
+  const env = makeEnv();
+  assert.equal(env.registered.length, 1, "exactly one target registered");
+  const target = env.registered[0];
+  assert.equal(typeof target.id, "string");
+  assert.ok(target.id.length > 0, "id is non-empty");
+  assert.equal(typeof target.label, "string");
+  assert.ok(target.label.length > 0, "label is non-empty");
+  assert.equal(typeof target.route, "string");
+  assert.ok(!target.route.startsWith("/") && !target.route.includes("://"), "route is a document-relative path");
+  assert.ok(Array.isArray(target.icon) && target.icon.length > 0
+    && target.icon.every((d) => typeof d === "string" && d.trim().length > 0), "icon is a path-data array");
+  assert.equal(env.disposers.length, 1, "the registration hangs off exactly one effect");
+  assert.equal(env.disposers[0].label, "open-in-codebuddy: open target");
+  assert.equal(env.released.length, 0, "nothing released while the plugin stays loaded");
+  console.log("client-selftest: scenario 1 (registration contract) passed");
 }
 
-// ---- 场景 2：host 探测不可用 → 按钮隐身 ----
+// ---- 场景 2：插件卸载 → 目标随之反注册 ----
 
 {
-  hookSlots = {};
-  const env = makeCtx({ cwd: "X:\\demo", available: false });
-  const { component } = env.registered;
-  render(component, { sessionId: "s1" }, { runEffects: true });
-  await settle();
-  const out = render(component, { sessionId: "s1" });
-  assert.equal(out, null, "button hidden when unavailable");
-  console.log("client-selftest: scenario 2 (hidden when unavailable) passed");
+  const env = makeEnv();
+  env.disposers[0].dispose();
+  assert.equal(JSON.stringify(env.released), JSON.stringify(["codebuddy"]), "unload releases the registered target");
+  console.log("client-selftest: scenario 2 (unload releases the target) passed");
 }
 
-// ---- 场景 3：可用但无 cwd → 按钮禁用 ----
+// ---- 场景 3：重复装配（宿主重载插件）不残留旧记录 ----
 
 {
-  hookSlots = {};
-  const env = makeCtx({ cwd: null, available: true });
-  const { component } = env.registered;
-  render(component, { sessionId: "ghost" }, { runEffects: true });
-  await settle();
-  const out = render(component, { sessionId: "ghost" });
-  assert.equal(out?.type, "button");
-  assert.equal(out.props.disabled, true, "button disabled without cwd");
-  console.log("client-selftest: scenario 3 (disabled without cwd) passed");
+  const env = makeEnv();
+  const second = makeEnv();
+  env.disposers[0].dispose();
+  assert.equal(second.registered.length, 1, "a fresh instance registers its own target");
+  assert.equal(env.released.length, 1, "the previous instance released only its own record");
+  console.log("client-selftest: scenario 3 (reload releases the previous record) passed");
+}
+
+// ---- 场景 4：内联图标与 assets 源文件逐条一致 ----
+
+{
+  const svg = readFileSync(new URL("../assets/codebuddy-cn-line.svg", import.meta.url), "utf8");
+  const paths = [...svg.matchAll(/d="([^"]+)"/g)].map((match) => match[1]);
+  const icon = makeEnv().registered[0].icon;
+  assert.equal(paths.length, icon.length, "asset path count matches the inline icon");
+  for (const d of paths) {
+    assert.ok(icon.includes(d), `asset path inlined verbatim: ${d.slice(0, 24)}…`);
+  }
+  console.log("client-selftest: scenario 4 (inline icons match assets) passed");
 }
 
 console.log("client-selftest: all scenarios passed");

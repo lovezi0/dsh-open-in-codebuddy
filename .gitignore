@@ -6,6 +6,7 @@ docs/
 
 # 版本工作归档目录，不进仓库
 plans/
+upgrade plan/
 
 # 依赖与构建缓存
 node_modules/
