@@ -18,31 +18,25 @@
 
 ⚠️ 本插件依赖 `dsh-open-in-app-base`：请先安装底座，否则会话头部不会出现「Open In...」菜单项。
 
-本插件不发布 npm，仅通过远程仓库 **tag** 安装；tag 拉取的源码自带构建产物 `lib/`，安装侧零构建。
+本插件发布在 npm，按包名安装即可（默认装最新版，可用 `包名@版本` 钉住精确版本）。
 
 ```bash
 # web profile 安装
     # 1. 底座（会话头部的「Open In...」按钮组）
     dsh plugin --profile web add dsh-open-in-app-base
 
-    # 2. 本插件（# 后接版本 tag）
-        # cnb仓库
-        dsh plugin --profile web add 'https://cnb.cool/txpoi/lovezi0/dsh-open-in-codebuddy.git'
-
-        # github仓库
-        dsh plugin --profile web add 'github:lovezi0/dsh-open-in-codebuddy'
+    # 2. 本插件
+    dsh plugin --profile web add dsh-open-in-codebuddy
 
 # desktop 安装
     # 1. 底座（会话头部的「Open In...」按钮组）
     dsh-open-in-app-base
 
-    # 2. 本插件（# 后接版本 tag）
-        # cnb仓库
-        https://cnb.cool/txpoi/lovezi0/dsh-open-in-codebuddy.git
-
-        # github仓库
-        github:lovezi0/dsh-open-in-codebuddy
+    # 2. 本插件
+    dsh-open-in-codebuddy
 ```
+
+备选：也可从远程仓库 tag 直接安装（tag 源码自带构建产物 `lib/`，安装侧零构建），写法为 `'github:lovezi0/dsh-open-in-codebuddy#vX.Y.Z'`。
 
 ## 配置
 
@@ -60,7 +54,8 @@
 
 ## 开发与发布
 
-- 构建：`npm run build`（纯 Node 脚本，零依赖；产物 `lib/` 随仓库提交，安装侧零构建）。
+- 构建：`npm run build`（纯 Node 脚本，零依赖；产物 `lib/` 随仓库提交，tag 安装通道零构建）。
+- 发布：在 GitHub 仓库推送 `vX.Y.Z` tag 触发 GitHub Actions，自检（build + selftest）通过后经 npm Trusted Publishing（OIDC，免 token）自动发布；tag 必须与 `package.json` 的 `version` 一致，否则发布失败。
 - 图标：线条化素材在 `assets/codebuddy-cn-line.svg`，浏览器产物内联其路径数据；离线自测会比对两者，素材改动需同步到 `src/client/10-target.js`。
 - 离线自测：`npm run selftest`（用假宿主 ctx 驱动 host 路由、用 vm 沙箱驱动 client 产物，覆盖围栏、入参校验、跨半边的路由约定与注册链路，无需装载 DSH）。
 - 提交前请自行完成脱敏检查（本机路径、用户名、凭据一律不得入库）。

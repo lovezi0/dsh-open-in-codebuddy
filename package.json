@@ -16,9 +16,12 @@
     "LICENSE"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://cnb.cool/txpoi/lovezi0/dsh-open-in-codebuddy.git"
+    "url": "git+https://github.com/lovezi0/dsh-open-in-codebuddy.git"
   },
   "keywords": [
     "deepseek-harness",
