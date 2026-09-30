@@ -1,6 +1,10 @@
-# dsh-open-in-codebuddy bundle patch：一个 insert 注册本插件。
-# insert.name 必须是【包名】（dsh plugin add 后由 profile 的 node_modules 解析到 lib/index.js）；
-# insert.id 与入口导出的 cordis `name`（'open-in-codebuddy'）保持一致。
+# dsh-open-in-codebuddy bundle patch：随本插件一并装配底座 dsh-open-in-app-base 与本插件。
+# insert.name 必须是【包名】；profile 的 node_modules 为 hoisted 扁平布局，
+# 本包的依赖（含底座）会平铺到其中，底座行因此可解析。
+# 底座行的 id 与 dsh-open-in-app-base 自身 patch 的行 id 逐字一致（open-in-app-base）：
+# 多个携带者同装、或用户显式安装底座时，同 id 行在 patch 组合时合并为一条，不会双重加载。
 - insert:
+    - id: open-in-app-base
+      name: 'dsh-open-in-app-base'
     - id: open-in-codebuddy
       name: 'dsh-open-in-codebuddy'

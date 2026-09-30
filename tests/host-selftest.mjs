@@ -27,14 +27,22 @@ for (const rel of ["src/index.mjs", "src/client/00-head.js", "src/client/10-targ
   assert.ok(existsSync(new URL(rel, root)), `source file exists: ${rel}`);
 }
 
-// ---- bundle patch 行：三个名字各司其职 ----
+// ---- bundle patch 行：携带底座 + 自身，两行的三个名字各司其职 ----
 
 const patch = readFileSync(new URL(pkg.dsh.bundle.patch, root), "utf8");
-const rowId = /^\s*-\s*id:\s*(\S+)\s*$/m.exec(patch);
-const rowName = /^\s*name:\s*'?([^'\s]+)'?\s*$/m.exec(patch);
-assert.ok(rowId && rowName, "bundle patch declares one insert row");
-assert.equal(rowName[1], pkg.name, "insert.name is the package name (resolved through profile node_modules)");
-assert.equal(rowId[1], name, "insert.id equals the exported cordis service name");
+const rows = [...patch.matchAll(/^\s*-\s*id:\s*(\S+)\s*$\n^\s*name:\s*'?([^'\s]+)'?\s*$/gm)]
+  .map((match) => ({ id: match[1], name: match[2] }));
+assert.equal(rows.length, 2, "bundle patch declares exactly two insert rows (base + self)");
+const baseRow = rows.find((row) => row.name === "dsh-open-in-app-base");
+assert.ok(baseRow, "the carried base row targets the base package by name");
+// 行 id 契约：必须与 dsh-open-in-app-base 自身 bundle patch 的行 id 逐字一致，
+// 否则用户同装底座时同包会以两个 id 双重加载。
+assert.equal(baseRow.id, "open-in-app-base", "base row id matches the base's own patch row verbatim");
+const selfRow = rows.find((row) => row.name === pkg.name);
+assert.ok(selfRow, "bundle patch declares the self row");
+assert.equal(selfRow.id, name, "insert.id equals the exported cordis service name");
+// 携带行与依赖清单必须成对：无依赖则安装侧解析不到底座包。
+assert.ok(pkg.dependencies?.["dsh-open-in-app-base"], "base is declared as an npm dependency to be carried");
 
 // ---- 假宿主环境 ----
 

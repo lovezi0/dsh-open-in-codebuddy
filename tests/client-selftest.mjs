@@ -26,21 +26,28 @@ assert.equal(captured.id, pkg.name, "registered id equals the package name");
 const clientExports = captured.factory((name) => { throw new Error(`unexpected require: ${name}`); });
 
 assert.equal(typeof clientExports.apply, "function", "apply exported");
-assert.equal(JSON.stringify(clientExports.inject), JSON.stringify(["openInAppTargets"]), "declares the base registry service");
+assert.equal(clientExports.inject, undefined, "top level declares no hard dependency on the base");
 
 // ---- 假客户端 ctx：底座已装配的那个世界 ----
 
-function makeEnv() {
+function makeEnv({ withBase = true } = {}) {
   const registered = [];
   const released = [];
   const disposers = [];
-  const ctx = {
+  const scope = {
     effect: (fn, label) => { disposers.push({ label, dispose: fn() }); return () => {}; },
     openInAppTargets: {
       register: (target) => {
         registered.push(target);
         return () => { released.push(target.id); };
       },
+    },
+  };
+  const ctx = {
+    // 模拟 cordis ctx.inject：底座在场即视为服务就绪、立刻执行回调；缺席则回调不执行。
+    inject: (deps, callback) => {
+      assert.equal(JSON.stringify(deps), JSON.stringify(["openInAppTargets"]), "child fiber waits on the base registry service");
+      if (withBase) callback(scope);
     },
   };
   clientExports.apply(ctx);
@@ -98,6 +105,15 @@ function makeEnv() {
     assert.ok(icon.includes(d), `asset path inlined verbatim: ${d.slice(0, 24)}…`);
   }
   console.log("client-selftest: scenario 4 (inline icons match assets) passed");
+}
+
+// ---- 场景 5：底座缺席（未安装 dsh-open-in-app-base）→ 装配不抛错、零注册 ----
+
+{
+  const env = makeEnv({ withBase: false });
+  assert.equal(env.registered.length, 0, "nothing registered without the base");
+  assert.equal(env.disposers.length, 0, "no effect armed without the base");
+  console.log("client-selftest: scenario 5 (absent base degrades to a no-op) passed");
 }
 
 console.log("client-selftest: all scenarios passed");
