@@ -1,10 +1,6 @@
-# dsh-open-in-codebuddy bundle patch：随本插件一并装配底座 dsh-open-in-app-base 与本插件。
-# insert.name 必须是【包名】；profile 的 node_modules 为 hoisted 扁平布局，
-# 本包的依赖（含底座）会平铺到其中，底座行因此可解析。
-# 底座行的 id 与 dsh-open-in-app-base 自身 patch 的行 id 逐字一致（open-in-app-base）：
-# 多个携带者同装、或用户显式安装底座时，同 id 行在 patch 组合时合并为一条，不会双重加载。
+# dsh-open-in-codebuddy bundle patch：仅装配本插件自身。
+# 底座 dsh-open-in-app-base 不再随本包携带（携带会导致宿主无法正常卸载本插件），
+# 需用户另行安装：dsh plugin --profile <name> add dsh-open-in-app-base。
 - insert:
-    - id: open-in-app-base
-      name: 'dsh-open-in-app-base'
     - id: open-in-codebuddy
       name: 'dsh-open-in-codebuddy'

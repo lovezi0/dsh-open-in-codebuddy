@@ -16,15 +16,17 @@
 
 ## 安装
 
-本插件自动携带底座 `dsh-open-in-app-base`（会话头部的「Open In...」按钮组），安装本插件即得到完整功能，无需单独安装底座；已显式装过底座的也不会重复加载。
+本插件依赖底座 `dsh-open-in-app-base`（会话头部的「Open In...」按钮组），需先单独安装底座再安装本插件。缺少底座时本插件不会报错，只是没有按钮组可挂载目标。
 
-本插件发布在 npm，按包名安装即可（默认装最新版，可用 `包名@版本` 钉住精确版本）。
+两个包都发布在 npm，按包名安装即可（默认装最新版，可用 `包名@版本` 钉住精确版本）。
 
 ```bash
-# web profile 安装（自动携带底座）
+# web profile 安装（先底座，后本插件）
+dsh plugin --profile web add dsh-open-in-app-base
 dsh plugin --profile web add dsh-open-in-codebuddy
 
-# desktop profile 安装（自动携带底座）
+# desktop profile 安装（先底座，后本插件）
+dsh plugin --profile desktop add dsh-open-in-app-base
 dsh plugin --profile desktop add dsh-open-in-codebuddy
 ```
 
@@ -54,6 +56,8 @@ dsh plugin --profile desktop add dsh-open-in-codebuddy
 
 ## 版本历史
 
+- **0.1.3** 
+    - 💥移除 dsh-open-in-app-base 默认携带 *插件携带底座会导致无法正常卸载*
 - **0.1.2** 
     - 🐛修复缺少dsh-open-in-app-base插件的情况下dsh启动崩溃的问题
 - **0.1.1** 
