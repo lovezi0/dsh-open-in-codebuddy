@@ -19,9 +19,9 @@ import Schema from "@deepseek-ai/schemastery";
 // cordis 服务名，必须与 cordis.patch.yml 的 insert.id 一致。
 export const name = "open-in-codebuddy";
 
-// 静态声明依赖：webServer 承载同源路由，webRuntime 提供可信 Host 清单。
+// 静态声明依赖：webServer 承载同源路由，webStartup 提供可信 Host 清单。
 // 不用 ctx.inject 惰性回调：回调内注册的路由在部分宿主形态下不生效。
-export const inject = ["webServer", "webRuntime"];
+export const inject = ["webServer", "webStartup"];
 
 // 字段一律不加 volatile：不同 profile 解析到不同的 schemastery 副本，
 // web 侧那份没有该 API，加了会加载期抛错。读值统一经 unwrap()。
@@ -264,7 +264,7 @@ export function apply(ctx, config) {
   // ---- 路由 ----
 
   function trusted(request, response) {
-    if (isTrustedRequest(request, ctx.webRuntime?.trustedHosts ?? [])) return true;
+    if (isTrustedRequest(request, ctx.webStartup?.trustedHosts ?? [])) return true;
     logger.warn(`rejected untrusted request: ${String(request?.url ?? "")}`);
     sendJson(response, 403, { ok: false, error: "forbidden" });
     return false;

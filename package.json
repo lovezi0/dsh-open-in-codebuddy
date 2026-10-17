@@ -1,6 +1,6 @@
 {
   "name": "dsh-open-in-codebuddy",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "DeepSeek Harness 插件：向会话头部「Open In...」按钮组注册 CodeBuddy CN 打开目标，一键用本机 CodeBuddy CN 打开当前 workspace 目录。",
   "type": "module",
   "main": "lib/index.js",
@@ -30,7 +30,8 @@
     "open-in-app"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "dsh": ">=0.2.1-alpha.1"
   },
   "dsh": {
     "bundle": {
@@ -39,10 +40,6 @@
     "client": {
       "platform": "web"
     }
-  },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/schemastery": ">=3.18.3 <4.0.0"
   },
   "scripts": {
     "build": "node scripts/build.mjs",

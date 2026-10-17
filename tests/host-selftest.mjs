@@ -11,7 +11,7 @@ const root = new URL("../", import.meta.url);
 const { apply, name, inject } = await import(new URL("../lib/index.js", import.meta.url).href);
 
 assert.equal(name, "open-in-codebuddy");
-assert.deepEqual(inject, ["webServer", "webRuntime"]);
+assert.deepEqual(inject, ["webServer", "webStartup"]);
 
 // ---- 清单与产物对齐 ----
 
@@ -39,6 +39,8 @@ assert.equal(selfRow.id, name, "insert.id equals the exported cordis service nam
 assert.ok(!rows.some((row) => row.name === "dsh-open-in-app-base"),
   "no base insert row is carried by this bundle");
 assert.equal(pkg.dependencies, undefined, "the base is not declared as an npm dependency");
+assert.equal(typeof pkg.engines.dsh, "string", "host compatibility is declared in engines.dsh");
+assert.equal(pkg.peerDependencies, undefined, "no peer ranges left that the engines rule would ignore");
 
 // ---- 假宿主环境 ----
 
@@ -54,7 +56,7 @@ const ctx = {
   webServer: {
     register: (route) => { routes.set(route.path, route); return () => routes.delete(route.path); },
   },
-  webRuntime: { trustedHosts: [] },
+  webStartup: { trustedHosts: [] },
 };
 
 apply(ctx, { codebuddyHome: "" });
